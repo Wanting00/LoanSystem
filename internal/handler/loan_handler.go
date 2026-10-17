@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"log"
 	"net/http"
 
@@ -41,14 +42,18 @@ func (this *LoanHandler) createLoan(c *gin.Context) {
 		return
 	}
 
-	response, err := this.service.CreateLoan(c.Request.Context(), request)
+	err := this.service.CreateLoan(c.Request.Context(), request)
+	if errors.Is(err, service.ErrBorrowerNotFound) {
+		c.JSON(http.StatusNotFound, dto.MessageResponse{Message: err.Error()})
+		return
+	}
 	if err != nil {
 		log.Printf("create loan failed: %v", err)
 		c.JSON(http.StatusInternalServerError, dto.MessageResponse{Message: "failed to create loan"})
 		return
 	}
 
-	c.JSON(http.StatusCreated, response)
+	c.JSON(http.StatusCreated, dto.MessageResponse{Message: "loan created successfully"})
 }
 
 func (this *LoanHandler) getLoan(c *gin.Context) {

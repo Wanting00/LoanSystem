@@ -12,20 +12,25 @@ import (
 )
 
 type LoanService struct {
-	loanRepository *repository.LoanRepository
+	loanRepository  *repository.LoanRepository
+	borrowerService *BorrowerService
 }
 
-func NewLoanService(loanRepository *repository.LoanRepository) *LoanService {
-	return &LoanService{loanRepository: loanRepository}
+func NewLoanService(loanRepository *repository.LoanRepository, borrowerService *BorrowerService) *LoanService {
+	return &LoanService{loanRepository: loanRepository, borrowerService: borrowerService}
 }
 
-func (s *LoanService) CreateLoan(ctx context.Context, request dto.CreateLoanRequest) (dto.LoanResponse, error) {
-	loan, err := s.loanRepository.Create(ctx, mapper.CreateLoanRequestToLoan(request))
+func (s *LoanService) CreateLoan(ctx context.Context, request dto.CreateLoanRequest) error {
+	exists, err := s.borrowerService.BorrowerExists(ctx, request.BorrowerID)
 	if err != nil {
-		return dto.LoanResponse{}, err
+		return err
+	}
+	if !exists {
+		return ErrBorrowerNotFound
 	}
 
-	return mapper.LoanToLoanResponse(loan), nil
+	_, err = s.loanRepository.Create(ctx, mapper.CreateLoanRequestToLoan(request))
+	return err
 }
 
 func (s *LoanService) GetLoan(id string) dto.LoanResponse {

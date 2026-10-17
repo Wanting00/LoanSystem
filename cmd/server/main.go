@@ -19,7 +19,8 @@ func main() {
 	}
 
 	loanRepository := repository.NewLoanRepository(db)
-	router := handler.NewRouter(service.NewLoanService(loanRepository))
+	borrowerService := service.NewBorrowerService(repository.NewBorrowerRepository(db))
+	router := handler.NewRouter(service.NewLoanService(loanRepository, borrowerService))
 
 	log.Printf("loan service listening on %s", cfg.HTTPAddress)
 	if err := http.ListenAndServe(cfg.HTTPAddress, router); err != nil && !errors.Is(err, http.ErrServerClosed) {
