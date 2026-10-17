@@ -1,28 +1,31 @@
 package service
 
 import (
+	"context"
+
 	"loan-service/internal/dto"
 	"loan-service/internal/model"
+	"loan-service/internal/repository"
+	"loan-service/mapper"
 
 	"github.com/shopspring/decimal"
 )
 
-type LoanService struct{}
-
-func NewLoanService() *LoanService {
-	return &LoanService{}
+type LoanService struct {
+	loanRepository *repository.LoanRepository
 }
 
-func (s *LoanService) CreateLoan(request dto.CreateLoanRequest) dto.LoanResponse {
-	return dto.LoanResponse{
-		ID:                 1,
-		BorrowerID:         request.BorrowerID,
-		Principal:          request.Principal,
-		Rate:               request.Rate,
-		ROI:                request.ROI,
-		Status:             model.LoanStatusProposed,
-		AgreementLetterURL: request.AgreementLetterURL,
+func NewLoanService(loanRepository *repository.LoanRepository) *LoanService {
+	return &LoanService{loanRepository: loanRepository}
+}
+
+func (s *LoanService) CreateLoan(ctx context.Context, request dto.CreateLoanRequest) (dto.LoanResponse, error) {
+	loan, err := s.loanRepository.Create(ctx, mapper.CreateLoanRequestToLoan(request))
+	if err != nil {
+		return dto.LoanResponse{}, err
 	}
+
+	return mapper.LoanToLoanResponse(loan), nil
 }
 
 func (s *LoanService) GetLoan(id string) dto.LoanResponse {

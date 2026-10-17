@@ -7,12 +7,19 @@ import (
 
 	"loan-service/config"
 	"loan-service/internal/handler"
+	"loan-service/internal/repository"
 	"loan-service/internal/service"
 )
 
 func main() {
 	cfg := config.Load()
-	router := handler.NewRouter(service.NewLoanService())
+	db, err := config.OpenMySQL(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	loanRepository := repository.NewLoanRepository(db)
+	router := handler.NewRouter(service.NewLoanService(loanRepository))
 
 	log.Printf("loan service listening on %s", cfg.HTTPAddress)
 	if err := http.ListenAndServe(cfg.HTTPAddress, router); err != nil && !errors.Is(err, http.ErrServerClosed) {

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 
 	"loan-service/internal/dto"
@@ -40,7 +41,14 @@ func (this *LoanHandler) createLoan(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, this.service.CreateLoan(request))
+	response, err := this.service.CreateLoan(c.Request.Context(), request)
+	if err != nil {
+		log.Printf("create loan failed: %v", err)
+		c.JSON(http.StatusInternalServerError, dto.MessageResponse{Message: "failed to create loan"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, response)
 }
 
 func (this *LoanHandler) getLoan(c *gin.Context) {
