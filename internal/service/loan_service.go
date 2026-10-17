@@ -3,6 +3,8 @@ package service
 import (
 	"loan-service/internal/dto"
 	"loan-service/internal/model"
+
+	"github.com/shopspring/decimal"
 )
 
 type LoanService struct{}
@@ -27,9 +29,9 @@ func (s *LoanService) GetLoan(id string) dto.LoanResponse {
 	return dto.LoanResponse{
 		ID:                 1,
 		BorrowerID:         1,
-		Principal:          100000,
-		Rate:               0.05,
-		ROI:                0.08,
+		Principal:          decimal.NewFromInt(100000),
+		Rate:               decimal.NewFromFloat(0.05),
+		ROI:                decimal.NewFromFloat(0.08),
 		Status:             model.LoanStatusProposed,
 		AgreementLetterURL: "https://example.com/agreement.pdf",
 	}

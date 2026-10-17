@@ -1,13 +1,17 @@
 package dto
 
-import "time"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 type CreateLoanRequest struct {
-	BorrowerID         uint64  `json:"borrowerId"`
-	Principal          int64   `json:"principal"`
-	Rate               float64 `json:"rate"`
-	ROI                float64 `json:"roi"`
-	AgreementLetterURL string  `json:"agreementLetterUrl"`
+	BorrowerID         uint64          `json:"borrowerId"`
+	Principal          decimal.Decimal `json:"principal"`
+	Rate               decimal.Decimal `json:"rate"`
+	ROI                decimal.Decimal `json:"roi"`
+	AgreementLetterURL string          `json:"agreementLetterUrl"`
 }
 
 type ApproveLoanRequest struct {

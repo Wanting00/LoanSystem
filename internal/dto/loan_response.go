@@ -1,13 +1,17 @@
 package dto
 
-import "loan-service/internal/model"
+import (
+	"loan-service/internal/model"
+
+	"github.com/shopspring/decimal"
+)
 
 type LoanResponse struct {
 	ID                 uint64           `json:"id"`
 	BorrowerID         uint64           `json:"borrowerId"`
-	Principal          int64            `json:"principal"`
-	Rate               float64          `json:"rate"`
-	ROI                float64          `json:"roi"`
+	Principal          decimal.Decimal  `json:"principal"`
+	Rate               decimal.Decimal  `json:"rate"`
+	ROI                decimal.Decimal  `json:"roi"`
 	Status             model.LoanStatus `json:"status"`
 	AgreementLetterURL string           `json:"agreementLetterUrl"`
 }
