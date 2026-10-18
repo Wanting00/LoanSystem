@@ -1,6 +1,6 @@
 # Loan Service
 
-一个使用 Go、Gin、GORM 和 MySQL 搭建的贷款服务。贷款创建接口通过分层调用将贷款数据持久化到 MySQL；其他贷款查询、审批、投资和放款接口仍为 mock 实现。
+一个使用 Go、Gin、GORM 和 MySQL 搭建的贷款服务。贷款创建和审批接口通过分层调用将数据持久化到 MySQL；贷款查询、投资和放款接口仍为 mock 实现。
 
 ## 技术栈
 
@@ -28,7 +28,7 @@
 │   ├── repository/
 │   │   └── loan_repository.go      # GORM 数据访问
 │   └── service/
-│       └── loan_service.go         # 贷款创建业务逻辑及其他 mock 响应
+│       └── loan_service.go         # 贷款创建、审批业务逻辑及其他 mock 响应
 ├── go.mod
 └── go.sum
 ```
@@ -68,7 +68,7 @@ HTTP Request → Gin Router → Handler → Service → Repository → MySQL
 | `GET` | `/health` | 返回 `{"message":"ok"}` |
 | `POST` | `/api/v1/loans/create` | 接收创建贷款 DTO，持久化新贷款并返回数据库记录（创建成功 `201`，请求绑定错误 `400`，持久化失败 `500`） |
 | `GET` | `/api/v1/loans/:id` | 返回固定的 mock 贷款数据 |
-| `POST` | `/api/v1/loans/:id/approve` | 接收审批 DTO，返回 `{"message":"mock response"}` |
+| `POST` | `/api/v1/loans/:id/approve` | 审批 `PROPOSED` 贷款；成功返回 `200`，贷款不存在返回 `404`，状态不允许或审批记录冲突返回 `409`，ID 或请求错误返回 `400` |
 | `POST` | `/api/v1/loans/:id/invest` | 接收投资 DTO，返回 `{"message":"mock response"}` |
 | `POST` | `/api/v1/loans/:id/disburse` | 接收放款 DTO，返回 `{"message":"mock response"}` |
 
@@ -84,7 +84,7 @@ HTTP Request → Gin Router → Handler → Service → Repository → MySQL
 }
 ```
 
-其余请求字段定义在 `internal/dto/loan_request.go`。请求 JSON 无法绑定时，Handler 返回 HTTP `400` 和错误信息。除创建接口外，当前其他贷款 ID 尚不会触发数据库查询或状态变化。
+审批请求需要提供 `validatorPhotoUrl`、`employeeId` 和 `approvalDate`；审批记录创建与贷款状态更新在同一事务中执行，并通过 MySQL `SELECT ... FOR UPDATE` 锁定贷款行。相关数据库表必须使用支持事务和行级锁的存储引擎（例如 InnoDB）。其余请求字段定义在 `internal/dto/loan_request.go`。请求 JSON 无法绑定时，Handler 返回 HTTP `400` 和错误信息。除创建和审批接口外，当前其他贷款 ID 尚不会触发数据库查询或状态变化。
 
 ## 配置与运行
 
@@ -102,8 +102,8 @@ go run ./cmd/server
 
 ## 当前范围
 
-贷款创建接口已接入 Repository 和 MySQL。以下能力仍未实现：
+贷款创建和审批接口已接入 Repository 和 MySQL。以下能力仍未实现：
 
 - `GET /api/v1/loans/:id` 的数据库查询
-- 贷款状态流转及审批、投资、放款业务校验
+- 投资、放款业务校验与状态流转
 - 身份认证、文件上传、通知等附加功能

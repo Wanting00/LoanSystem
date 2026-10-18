@@ -16,6 +16,15 @@ func CreateLoanRequestToLoan(request dto.CreateLoanRequest) model.Loan {
 	}
 }
 
+func ApproveLoanRequestToApproval(loanID uint64, request dto.ApproveLoanRequest) model.Approval {
+	return model.Approval{
+		LoanID:            loanID,
+		ValidatorPhotoURL: request.ValidatorPhotoURL,
+		EmployeeID:        request.EmployeeID,
+		ApprovalDate:      request.ApprovalDate,
+	}
+}
+
 func LoanToLoanResponse(loan model.Loan) dto.LoanResponse {
 	return dto.LoanResponse{
 		ID:                 loan.ID,

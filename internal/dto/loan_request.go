@@ -15,9 +15,9 @@ type CreateLoanRequest struct {
 }
 
 type ApproveLoanRequest struct {
-	ValidatorPhotoURL string    `json:"validatorPhotoUrl"`
-	EmployeeID        string    `json:"employeeId"`
-	ApprovalDate      time.Time `json:"approvalDate"`
+	ValidatorPhotoURL string    `json:"validatorPhotoUrl" binding:"required"`
+	EmployeeID        string    `json:"employeeId" binding:"required"`
+	ApprovalDate      time.Time `json:"approvalDate" binding:"required"`
 }
 
 type InvestRequest struct {

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 
 	"loan-service/internal/dto"
 	"loan-service/internal/service"
@@ -61,13 +62,32 @@ func (this *LoanHandler) getLoan(c *gin.Context) {
 }
 
 func (this *LoanHandler) approveLoan(c *gin.Context) {
+	loanID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || loanID == 0 {
+		c.JSON(http.StatusBadRequest, dto.MessageResponse{Message: "invalid loan ID"})
+		return
+	}
+
 	var request dto.ApproveLoanRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, dto.MessageResponse{Message: err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, this.service.ApproveLoan(c.Param("id"), request))
+	err = this.service.ApproveLoan(c.Request.Context(), loanID, request)
+	switch {
+	case errors.Is(err, service.ErrInvalidApprovalRequest):
+		c.JSON(http.StatusBadRequest, dto.MessageResponse{Message: err.Error()})
+	case errors.Is(err, service.ErrLoanNotFound):
+		c.JSON(http.StatusNotFound, dto.MessageResponse{Message: err.Error()})
+	case errors.Is(err, service.ErrLoanNotProposed), errors.Is(err, service.ErrApprovalConflict):
+		c.JSON(http.StatusConflict, dto.MessageResponse{Message: err.Error()})
+	case err != nil:
+		log.Printf("approve loan failed: %v", err)
+		c.JSON(http.StatusInternalServerError, dto.MessageResponse{Message: "failed to approve loan"})
+	default:
+		c.JSON(http.StatusOK, dto.MessageResponse{Message: "loan approved successfully"})
+	}
 }
 
 func (this *LoanHandler) investInLoan(c *gin.Context) {
