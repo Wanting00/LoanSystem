@@ -28,10 +28,19 @@ func (r *InvestmentRepository) TotalAmountByLoanID(tx *gorm.DB, loanID uint64) (
 	return total, nil
 }
 
-func (r *InvestmentRepository) Create(tx *gorm.DB, investment model.Investment) error {
-	if err := tx.Create(&investment).Error; err != nil {
+func (r *InvestmentRepository) Create(tx *gorm.DB, investment *model.Investment) error {
+	if err := tx.Create(investment).Error; err != nil {
 		return fmt.Errorf("create investment: %w", err)
 	}
 
 	return nil
+}
+
+func (r *InvestmentRepository) ListByLoanID(tx *gorm.DB, loanID uint64) ([]model.Investment, error) {
+	var investments []model.Investment
+	if err := tx.Where("loan_id = ?", loanID).Find(&investments).Error; err != nil {
+		return nil, fmt.Errorf("list investments for loan: %w", err)
+	}
+
+	return investments, nil
 }

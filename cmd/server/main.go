@@ -21,12 +21,20 @@ func main() {
 	loanRepository := repository.NewLoanRepository(db)
 	borrowerService := service.NewBorrowerService(repository.NewBorrowerRepository(db))
 	loanService := service.NewLoanService(db, loanRepository, borrowerService)
+	investmentRepository := repository.NewInvestmentRepository()
+	investorRepository := repository.NewInvestorRepository()
+	notificationService := service.NewNotificationService(
+		db,
+		investmentRepository,
+		investorRepository,
+		repository.NewNotificationLogRepository(db),
+	)
 	investService := service.NewInvestService(
 		db,
 		loanRepository,
-		repository.NewInvestmentRepository(),
-		repository.NewInvestorRepository(),
-		service.NewNotificationService(),
+		investmentRepository,
+		investorRepository,
+		notificationService,
 	)
 	disburseService := service.NewDisburseService(
 		db,

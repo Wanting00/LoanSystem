@@ -51,11 +51,12 @@ HTTP Request → Gin Router → Handler → Service → Repository → MySQL
 `internal/model` 中定义了以下结构：
 
 - `Borrower`：借款人，通过 `Loans` 与贷款建立一对多关系。
-- `Investor`：投资人，通过 `Investments` 与投资记录建立一对多关系。
+- `Investor`：投资人，包含邮箱地址，通过 `Investments` 与投资记录建立一对多关系。
 - `Loan`：贷款，状态为 `PROPOSED`、`APPROVED`、`INVESTED` 或 `DISBURSED`；关联借款人、审批、投资记录和放款记录。
 - `Approval`：贷款审批记录；`LoanID` 使用唯一索引，每笔贷款至多一条记录。
 - `Investment`：贷款投资记录；关联一笔贷款和一位投资人。
 - `Disbursement`：贷款放款记录；`LoanID` 使用唯一索引，每笔贷款至多一条记录。
+- `NotificationLog`：投资满额后的邮件通知记录；为每笔投资保存接收邮箱、协议链接和发送状态。
 
 这些结构包含相应的 GORM 标签。应用启动不会自动建表或执行迁移；请确保数据库和数据表已预先初始化。
 
@@ -86,7 +87,7 @@ HTTP Request → Gin Router → Handler → Service → Repository → MySQL
 
 审批请求需要提供 `validatorPhotoUrl`、`employeeId` 和 `approvalDate`；审批记录创建与贷款状态更新在同一事务中执行，并通过 MySQL `SELECT ... FOR UPDATE` 锁定贷款行。投资请求使用 `investorId` 和正数 `amount`；投资记录创建、贷款状态检查及筹满时的状态更新在同一事务中执行。每次投资先锁定贷款行，再汇总该贷款已有的投资金额，因此同一贷款的并发投资会串行进行。放款请求需要提供 `signedAgreementUrl`（HTTP(S) PDF/JPEG 链接）、`employeeId` 和 RFC3339 格式的 `disbursementDate`；放款记录创建与状态更新同样在单个事务中执行，先通过行锁读取最新状态，且利用 `disbursements.loan_id` 唯一索引避免重复记录。URL 扩展名校验不能证明远程文件的真实内容。相关数据库表必须使用支持事务和行级锁的存储引擎（例如 InnoDB）。`investments.loan_id` 已建立索引，Disbursement 唯一索引通过 `go run ./cmd/migrate` 的 AutoMigrate 管理；数据库结构变更后请运行迁移命令。请求 JSON 无法绑定时，Handler 返回 HTTP `400` 和错误信息。贷款查询接口当前仍返回 mock 数据。
 
-当一笔投资使贷款首次募集完成时，投资事务提交成功后会启动 goroutine，并在最多 30 秒的独立上下文中调用 `NotificationService.CreateTasks`。当前该方法仅为 Mock，直接返回成功，不访问数据库、不创建通知任务，也不发送邮件。
+当一笔投资使贷款首次募集完成时，投资事务提交成功后会启动 goroutine，逐笔读取该贷款所有投资人的邮箱，为每笔投资创建独立的 `notification_logs` 记录并调用 `sendEmail`（当前为 Mock）；发送结果会分别写回 `sent` 或 `failed`。当前不接真实 SMTP。未来可增加定时任务周期性扫描 `pending` 记录补发；`failed` 记录留待人工处理或后续重试策略，本项目不实现定时补发或重试。
 
 ## 配置与运行
 
@@ -106,6 +107,6 @@ go run ./cmd/server
 
 贷款创建、审批、投资和放款接口已接入 Repository 和 MySQL。以下能力仍未实现：
 - `GET /api/v1/loans/:id` 的数据库查询
-- 身份认证、文件上传及实际通知处理等附加功能（通知服务当前为 Mock）
+- 身份认证、文件上传及实际 SMTP 邮件发送（当前 `sendEmail` 仅为 Mock）
 
 投资累计金额当前通过对 `investments.amount` 执行 `SUM` 实时计算。如果投资记录数量显著增长且聚合查询成为性能瓶颈，未来可考虑维护冗余的累计投资金额字段；该优化需要额外保证投资记录与累计金额的一致性，本次未实现。

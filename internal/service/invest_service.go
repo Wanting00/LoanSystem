@@ -50,9 +50,8 @@ func (s *InvestService) Invest(ctx context.Context, loanID uint64, request dto.I
 		return ErrInvalidInvestmentAmount
 	}
 
-	// flag to indicate if the loan became fully invested during this transaction
-	// loanBecameInvested = true, enable sending notification after the transaction completes
 	var loanBecameInvested bool
+	var agreementLetterURL string
 
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		loan, err := s.loanRepository.FindByIDForUpdate(tx, loanID)
@@ -62,6 +61,7 @@ func (s *InvestService) Invest(ctx context.Context, loanID uint64, request dto.I
 		if err != nil {
 			return err
 		}
+		agreementLetterURL = loan.AgreementLetterURL
 
 		// check if the loan is approved for investment
 		if loan.Status != model.LoanStatusApproved {
@@ -88,11 +88,12 @@ func (s *InvestService) Invest(ctx context.Context, loanID uint64, request dto.I
 			return ErrInvestmentExceedsLoan
 		}
 
-		if err := s.investmentRepository.Create(tx, model.Investment{
+		investment := &model.Investment{
 			LoanID:     loan.ID,
 			InvestorID: request.InvestorID,
 			Amount:     request.Amount,
-		}); err != nil {
+		}
+		if err := s.investmentRepository.Create(tx, investment); err != nil {
 			return err
 		}
 
@@ -110,14 +111,14 @@ func (s *InvestService) Invest(ctx context.Context, loanID uint64, request dto.I
 	}
 
 	if loanBecameInvested {
-		go func(notificationLoanID uint64) {
+		go func(notificationLoanID uint64, agreementURL string) {
 			notificationCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			if err := s.notificationService.CreateTasks(notificationCtx, notificationLoanID); err != nil {
-				log.Printf("create notification for loan %d failed: %v", notificationLoanID, err)
+			if err := s.notificationService.NotifyLoanInvested(notificationCtx, notificationLoanID, agreementURL); err != nil {
+				log.Printf("notify investors for loan %d failed: %v", notificationLoanID, err)
 			}
-		}(loanID)
+		}(loanID, agreementLetterURL)
 	}
 
 	return nil

@@ -20,6 +20,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.Approval{},
 		&model.Investment{},
 		&model.Disbursement{},
+		&model.NotificationLog{},
 	); err != nil {
 		return fmt.Errorf("auto-migrate loan system models: %w", err)
 	}
