@@ -20,17 +20,25 @@ func NewLoanService(loanRepository *repository.LoanRepository, borrowerService *
 	return &LoanService{loanRepository: loanRepository, borrowerService: borrowerService}
 }
 
-func (s *LoanService) CreateLoan(ctx context.Context, request dto.CreateLoanRequest) error {
+func (s *LoanService) CreateLoan(ctx context.Context, request dto.CreateLoanRequest) (uint64, error) {
+	// Check if the borrower exists before creating the loan
 	exists, err := s.borrowerService.BorrowerExists(ctx, request.BorrowerID)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if !exists {
-		return ErrBorrowerNotFound
+		return 0, ErrBorrowerNotFound
 	}
 
-	_, err = s.loanRepository.Create(ctx, mapper.CreateLoanRequestToLoan(request))
-	return err
+	// TODO: check if the loan terms are valid before creating the loan
+
+	// Create the loan in the repository
+	loan, err := s.loanRepository.Create(ctx, mapper.CreateLoanRequestToLoan(request))
+	if err != nil {
+		return 0, err
+	}
+
+	return loan.ID, nil
 }
 
 func (s *LoanService) GetLoan(id string) dto.LoanResponse {

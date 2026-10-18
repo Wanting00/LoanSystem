@@ -19,3 +19,8 @@ type LoanResponse struct {
 type MessageResponse struct {
 	Message string `json:"message"`
 }
+
+type CreateLoanResponse struct {
+	ID      uint64 `json:"id"`
+	Message string `json:"message"`
+}

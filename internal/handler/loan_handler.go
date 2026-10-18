@@ -42,7 +42,7 @@ func (this *LoanHandler) createLoan(c *gin.Context) {
 		return
 	}
 
-	err := this.service.CreateLoan(c.Request.Context(), request)
+	loanID, err := this.service.CreateLoan(c.Request.Context(), request)
 	if errors.Is(err, service.ErrBorrowerNotFound) {
 		c.JSON(http.StatusNotFound, dto.MessageResponse{Message: err.Error()})
 		return
@@ -53,7 +53,7 @@ func (this *LoanHandler) createLoan(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, dto.MessageResponse{Message: "loan created successfully"})
+	c.JSON(http.StatusCreated, dto.CreateLoanResponse{ID: loanID, Message: "loan created successfully"})
 }
 
 func (this *LoanHandler) getLoan(c *gin.Context) {

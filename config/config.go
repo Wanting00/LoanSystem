@@ -27,8 +27,10 @@ func Load() Config {
 		MySQLHost:     envOrDefault("MYSQL_HOST", "127.0.0.1"),
 		MySQLPort:     envOrDefault("MYSQL_PORT", "3306"),
 		MySQLDatabase: envOrDefault("MYSQL_DATABASE", "loan_system"),
-		MySQLUser:     os.Getenv("MYSQL_USER"),
-		MySQLPassword: os.Getenv("MYSQL_PASSWORD"),
+		MySQLUser:     envOrDefault("MYSQL_USER", "root"),
+		MySQLPassword: envOrDefault("MYSQL_PASSWORD", "123"),
+		// MySQLUser:     os.Getenv("MYSQL_USER"),
+		// MySQLPassword: os.Getenv("MYSQL_PASSWORD"),
 	}
 }
 
