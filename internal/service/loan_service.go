@@ -108,10 +108,6 @@ func (s *LoanService) InvestInLoan(id string, request dto.InvestRequest) dto.Mes
 	return mockResponse()
 }
 
-func (s *LoanService) DisburseLoan(id string, request dto.DisburseRequest) dto.MessageResponse {
-	return mockResponse()
-}
-
 func mockResponse() dto.MessageResponse {
 	return dto.MessageResponse{Message: "mock response"}
 }

@@ -13,13 +13,22 @@ import (
 )
 
 type LoanHandler struct {
-	service       *service.LoanService
-	investService *service.InvestService
+	service         *service.LoanService
+	investService   *service.InvestService
+	disburseService *service.DisburseService
 }
 
-func NewRouter(loanService *service.LoanService, investService *service.InvestService) *gin.Engine {
+func NewRouter(
+	loanService *service.LoanService,
+	investService *service.InvestService,
+	disburseService *service.DisburseService,
+) *gin.Engine {
 	router := gin.Default()
-	handler := &LoanHandler{service: loanService, investService: investService}
+	handler := &LoanHandler{
+		service:         loanService,
+		investService:   investService,
+		disburseService: disburseService,
+	}
 
 	router.GET("/health", handler.health)
 
@@ -121,11 +130,34 @@ func (this *LoanHandler) investInLoan(c *gin.Context) {
 }
 
 func (this *LoanHandler) disburseLoan(c *gin.Context) {
+	loanID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || loanID == 0 {
+		c.JSON(http.StatusBadRequest, dto.MessageResponse{Message: "invalid loan ID"})
+		return
+	}
+
 	var request dto.DisburseRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, dto.MessageResponse{Message: err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, this.service.DisburseLoan(c.Param("id"), request))
+	disbursementID, err := this.disburseService.Disburse(c.Request.Context(), loanID, request)
+	switch {
+	case errors.Is(err, service.ErrInvalidDisbursementRequest),
+		errors.Is(err, service.ErrInvalidSignedAgreementURL):
+		c.JSON(http.StatusBadRequest, dto.MessageResponse{Message: err.Error()})
+	case errors.Is(err, service.ErrLoanNotFound):
+		c.JSON(http.StatusNotFound, dto.MessageResponse{Message: err.Error()})
+	case errors.Is(err, service.ErrLoanNotInvested),
+		errors.Is(err, service.ErrDisbursementConflict):
+		c.JSON(http.StatusConflict, dto.MessageResponse{Message: err.Error()})
+	case err != nil:
+		log.Printf("disburse loan failed: %v", err)
+		c.JSON(http.StatusInternalServerError, dto.MessageResponse{Message: "failed to disburse loan"})
+	default:
+		c.JSON(http.StatusCreated, dto.DisbursementResponse{
+			DisbursementID: disbursementID,
+		})
+	}
 }
