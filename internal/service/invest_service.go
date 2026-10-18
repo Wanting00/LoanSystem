@@ -46,7 +46,7 @@ func NewInvestService(
 }
 
 func (s *InvestService) Invest(ctx context.Context, loanID uint64, request dto.InvestRequest) error {
-	if request.Amount <= 0 {
+	if !request.Amount.GreaterThan(decimal.Zero) || !request.Amount.Equal(request.Amount.Truncate(2)) {
 		return ErrInvalidInvestmentAmount
 	}
 
@@ -82,8 +82,7 @@ func (s *InvestService) Invest(ctx context.Context, loanID uint64, request dto.I
 		if err != nil {
 			return err
 		}
-		amount := decimal.NewFromInt(request.Amount)
-		newTotal := totalInvested.Add(amount)
+		newTotal := totalInvested.Add(request.Amount)
 		if newTotal.GreaterThan(loan.Principal) {
 			return ErrInvestmentExceedsLoan
 		}

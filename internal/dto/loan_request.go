@@ -21,8 +21,8 @@ type ApproveLoanRequest struct {
 }
 
 type InvestRequest struct {
-	InvestorID uint64 `json:"investorId"`
-	Amount     int64  `json:"amount"`
+	InvestorID uint64          `json:"investorId"`
+	Amount     decimal.Decimal `json:"amount"`
 }
 
 type DisburseRequest struct {

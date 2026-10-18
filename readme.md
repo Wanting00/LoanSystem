@@ -85,7 +85,7 @@ HTTP Request → Gin Router → Handler → Service → Repository → MySQL
 }
 ```
 
-审批请求需要提供 `validatorPhotoUrl`、`employeeId` 和 `approvalDate`；审批记录创建与贷款状态更新在同一事务中执行，并通过 MySQL `SELECT ... FOR UPDATE` 锁定贷款行。投资请求使用 `investorId` 和正数 `amount`；投资记录创建、贷款状态检查及筹满时的状态更新在同一事务中执行。每次投资先锁定贷款行，再汇总该贷款已有的投资金额，因此同一贷款的并发投资会串行进行。放款请求需要提供 `signedAgreementUrl`（HTTP(S) PDF/JPEG 链接）、`employeeId` 和 RFC3339 格式的 `disbursementDate`；放款记录创建与状态更新同样在单个事务中执行，先通过行锁读取最新状态，且利用 `disbursements.loan_id` 唯一索引避免重复记录。URL 扩展名校验不能证明远程文件的真实内容。相关数据库表必须使用支持事务和行级锁的存储引擎（例如 InnoDB）。`investments.loan_id` 已建立索引，Disbursement 唯一索引通过 `go run ./cmd/migrate` 的 AutoMigrate 管理；数据库结构变更后请运行迁移命令。请求 JSON 无法绑定时，Handler 返回 HTTP `400` 和错误信息。贷款查询接口当前仍返回 mock 数据。
+审批请求需要提供 `validatorPhotoUrl`、`employeeId` 和 `approvalDate`；审批记录创建与贷款状态更新在同一事务中执行，并通过 MySQL `SELECT ... FOR UPDATE` 锁定贷款行。投资请求使用 `investorId` 和正数 `amount`（DECIMAL，最多两位小数）；投资记录创建、贷款状态检查及筹满时的状态更新在同一事务中执行。每次投资先锁定贷款行，再汇总该贷款已有的投资金额，因此同一贷款的并发投资会串行进行。放款请求需要提供 `signedAgreementUrl`（HTTP(S) PDF/JPEG 链接）、`employeeId` 和 RFC3339 格式的 `disbursementDate`；放款记录创建与状态更新同样在单个事务中执行，先通过行锁读取最新状态，且利用 `disbursements.loan_id` 唯一索引避免重复记录。URL 扩展名校验不能证明远程文件的真实内容。相关数据库表必须使用支持事务和行级锁的存储引擎（例如 InnoDB）。`investments.loan_id` 已建立索引，Disbursement 唯一索引通过 `go run ./cmd/migrate` 的 AutoMigrate 管理；数据库结构变更后请运行迁移命令。请求 JSON 无法绑定时，Handler 返回 HTTP `400` 和错误信息。贷款查询接口当前仍返回 mock 数据。
 
 创建贷款时，服务会先检查 key 是否已映射到同一组业务参数；新贷款和 key 在同一数据库事务中写入。`ux_loans_idempotency_key` 唯一索引是并发请求时的最终防线；唯一键竞争失败后，服务先结束失败事务，再从数据库重新读取并比较参数。数据库结构通过 `go run ./cmd/migrate` 的 AutoMigrate 更新；新增列允许既有记录为 `NULL`，MySQL 唯一索引允许多条 `NULL`，新 API 写入仍要求 key。部署时应先备份数据库，再执行迁移命令。
 
