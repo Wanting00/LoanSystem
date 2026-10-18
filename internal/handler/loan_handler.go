@@ -13,12 +13,13 @@ import (
 )
 
 type LoanHandler struct {
-	service *service.LoanService
+	service       *service.LoanService
+	investService *service.InvestService
 }
 
-func NewRouter(loanService *service.LoanService) *gin.Engine {
+func NewRouter(loanService *service.LoanService, investService *service.InvestService) *gin.Engine {
 	router := gin.Default()
-	handler := &LoanHandler{service: loanService}
+	handler := &LoanHandler{service: loanService, investService: investService}
 
 	router.GET("/health", handler.health)
 
@@ -91,13 +92,32 @@ func (this *LoanHandler) approveLoan(c *gin.Context) {
 }
 
 func (this *LoanHandler) investInLoan(c *gin.Context) {
+	loanID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || loanID == 0 {
+		c.JSON(http.StatusBadRequest, dto.MessageResponse{Message: "invalid loan ID"})
+		return
+	}
+
 	var request dto.InvestRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, dto.MessageResponse{Message: err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, this.service.InvestInLoan(c.Param("id"), request))
+	err = this.investService.Invest(c.Request.Context(), loanID, request)
+	switch {
+	case errors.Is(err, service.ErrInvalidInvestmentAmount):
+		c.JSON(http.StatusBadRequest, dto.MessageResponse{Message: err.Error()})
+	case errors.Is(err, service.ErrLoanNotFound), errors.Is(err, service.ErrInvestorNotFound):
+		c.JSON(http.StatusNotFound, dto.MessageResponse{Message: err.Error()})
+	case errors.Is(err, service.ErrLoanNotApprovedForInvest), errors.Is(err, service.ErrInvestmentExceedsLoan):
+		c.JSON(http.StatusConflict, dto.MessageResponse{Message: err.Error()})
+	case err != nil:
+		log.Printf("invest in loan failed: %v", err)
+		c.JSON(http.StatusInternalServerError, dto.MessageResponse{Message: "failed to invest in loan"})
+	default:
+		c.JSON(http.StatusOK, dto.MessageResponse{Message: "investment created successfully"})
+	}
 }
 
 func (this *LoanHandler) disburseLoan(c *gin.Context) {
