@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"errors"
+	"log"
+	"time"
 
 	"loan-service/internal/dto"
 	"loan-service/internal/model"
@@ -24,6 +26,7 @@ type InvestService struct {
 	loanRepository       *repository.LoanRepository
 	investmentRepository *repository.InvestmentRepository
 	investorRepository   *repository.InvestorRepository
+	notificationService  *NotificationService
 }
 
 func NewInvestService(
@@ -31,12 +34,14 @@ func NewInvestService(
 	loanRepository *repository.LoanRepository,
 	investmentRepository *repository.InvestmentRepository,
 	investorRepository *repository.InvestorRepository,
+	notificationService *NotificationService,
 ) *InvestService {
 	return &InvestService{
 		db:                   db,
 		loanRepository:       loanRepository,
 		investmentRepository: investmentRepository,
 		investorRepository:   investorRepository,
+		notificationService:  notificationService,
 	}
 }
 
@@ -45,7 +50,11 @@ func (s *InvestService) Invest(ctx context.Context, loanID uint64, request dto.I
 		return ErrInvalidInvestmentAmount
 	}
 
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	// flag to indicate if the loan became fully invested during this transaction
+	// loanBecameInvested = true, enable sending notification after the transaction completes
+	var loanBecameInvested bool
+
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		loan, err := s.loanRepository.FindByIDForUpdate(tx, loanID)
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrLoanNotFound
@@ -88,9 +97,28 @@ func (s *InvestService) Invest(ctx context.Context, loanID uint64, request dto.I
 		}
 
 		if newTotal.Equal(loan.Principal) {
-			return s.loanRepository.UpdateLoanStatus(tx, loan.ID, model.LoanStatusInvested)
+			if err := s.loanRepository.UpdateLoanStatus(tx, loan.ID, model.LoanStatusInvested); err != nil {
+				return err
+			}
+			loanBecameInvested = true
 		}
 
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	if loanBecameInvested {
+		go func(notificationLoanID uint64) {
+			notificationCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			if err := s.notificationService.CreateTasks(notificationCtx, notificationLoanID); err != nil {
+				log.Printf("create notification for loan %d failed: %v", notificationLoanID, err)
+			}
+		}(loanID)
+	}
+
+	return nil
 }

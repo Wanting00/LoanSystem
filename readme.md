@@ -86,6 +86,8 @@ HTTP Request → Gin Router → Handler → Service → Repository → MySQL
 
 审批请求需要提供 `validatorPhotoUrl`、`employeeId` 和 `approvalDate`；审批记录创建与贷款状态更新在同一事务中执行，并通过 MySQL `SELECT ... FOR UPDATE` 锁定贷款行。投资请求使用 `investorId` 和正数 `amount`；投资记录创建、贷款状态检查及筹满时的状态更新在同一事务中执行。每次投资先锁定贷款行，再汇总该贷款已有的投资金额，因此同一贷款的并发投资会串行进行。相关数据库表必须使用支持事务和行级锁的存储引擎（例如 InnoDB）。`investments.loan_id` 已建立索引并由 `go run ./cmd/migrate` 的 AutoMigrate 管理；数据库结构变更后请运行迁移命令。其余请求字段定义在 `internal/dto/loan_request.go`。请求 JSON 无法绑定时，Handler 返回 HTTP `400` 和错误信息。除创建、审批和投资接口外，当前其他贷款 ID 尚不会触发数据库查询或状态变化。
 
+当一笔投资使贷款首次募集完成时，投资事务提交成功后会启动 goroutine，并在最多 30 秒的独立上下文中调用 `NotificationService.CreateTasks`。当前该方法仅为 Mock，直接返回成功，不访问数据库、不创建通知任务，也不发送邮件。
+
 ## 配置与运行
 
 ```powershell
@@ -106,6 +108,6 @@ go run ./cmd/server
 
 - `GET /api/v1/loans/:id` 的数据库查询
 - 放款业务校验与状态流转
-- 身份认证、文件上传、通知等附加功能
+- 身份认证、文件上传及实际通知处理等附加功能（通知服务当前为 Mock）
 
 投资累计金额当前通过对 `investments.amount` 执行 `SUM` 实时计算。如果投资记录数量显著增长且聚合查询成为性能瓶颈，未来可考虑维护冗余的累计投资金额字段；该优化需要额外保证投资记录与累计金额的一致性，本次未实现。

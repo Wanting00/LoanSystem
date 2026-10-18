@@ -26,6 +26,7 @@ func main() {
 		loanRepository,
 		repository.NewInvestmentRepository(),
 		repository.NewInvestorRepository(),
+		service.NewNotificationService(),
 	)
 	router := handler.NewRouter(loanService, investService)
 
