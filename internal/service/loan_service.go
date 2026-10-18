@@ -19,6 +19,7 @@ var (
 	ErrLoanNotProposed        = errors.New("loan is not in proposed status")
 	ErrApprovalConflict       = errors.New("approval record already exists")
 	ErrInvalidApprovalRequest = errors.New("approval information is required")
+	ErrIdempotencyConflict    = errors.New("idempotency key was already used with different loan parameters")
 )
 
 type LoanService struct {
@@ -27,11 +28,22 @@ type LoanService struct {
 	borrowerService *BorrowerService
 }
 
-func NewLoanService(db *gorm.DB, loanRepository *repository.LoanRepository, borrowerService *BorrowerService) *LoanService {
+func NewLoanService(
+	db *gorm.DB,
+	loanRepository *repository.LoanRepository,
+	borrowerService *BorrowerService) *LoanService {
 	return &LoanService{db: db, loanRepository: loanRepository, borrowerService: borrowerService}
 }
 
-func (s *LoanService) CreateLoan(ctx context.Context, request dto.CreateLoanRequest) (uint64, error) {
+func (s *LoanService) CreateLoan(ctx context.Context, idempotencyKey string, request dto.CreateLoanRequest) (uint64, error) {
+	existingLoan, err := s.loanRepository.FindByIdempotencyKey(s.db.WithContext(ctx), idempotencyKey)
+	if err == nil {
+		return matchingLoanID(existingLoan, request)
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return 0, err
+	}
+
 	// Check if the borrower exists before creating the loan
 	exists, err := s.borrowerService.BorrowerExists(ctx, request.BorrowerID)
 	if err != nil {
@@ -41,14 +53,41 @@ func (s *LoanService) CreateLoan(ctx context.Context, request dto.CreateLoanRequ
 		return 0, ErrBorrowerNotFound
 	}
 
-	//TODO: idempotency check before creating it
-
 	// TODO: check if the loan terms are valid before creating the loan
 
-	// Create the loan in the repository
-	loan, err := s.loanRepository.Create(ctx, mapper.CreateLoanRequestToLoan(request))
+	loan := mapper.CreateLoanRequestToLoan(request)
+	loan.IdempotencyKey = idempotencyKey
+
+	var createdLoan model.Loan
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var createErr error
+		createdLoan, createErr = s.loanRepository.CreateInTx(tx, loan)
+		return createErr
+	})
+	if errors.Is(err, repository.ErrDuplicateIdempotencyKey) {
+		existingLoan, findErr := s.loanRepository.FindByIdempotencyKey(s.db.WithContext(ctx), idempotencyKey)
+		if findErr != nil {
+			if errors.Is(findErr, gorm.ErrRecordNotFound) {
+				return 0, err
+			}
+			return 0, findErr
+		}
+		return matchingLoanID(existingLoan, request)
+	}
 	if err != nil {
 		return 0, err
+	}
+
+	return createdLoan.ID, nil
+}
+
+func matchingLoanID(loan model.Loan, request dto.CreateLoanRequest) (uint64, error) {
+	if loan.BorrowerID != request.BorrowerID ||
+		!loan.Principal.Equal(request.Principal) ||
+		!loan.Rate.Equal(request.Rate) ||
+		!loan.ROI.Equal(request.ROI) ||
+		loan.AgreementLetterURL != request.AgreementLetterURL {
+		return 0, ErrIdempotencyConflict
 	}
 
 	return loan.ID, nil

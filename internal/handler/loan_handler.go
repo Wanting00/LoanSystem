@@ -53,9 +53,19 @@ func (this *LoanHandler) createLoan(c *gin.Context) {
 		return
 	}
 
-	loanID, err := this.service.CreateLoan(c.Request.Context(), request)
+	idempotencyKey := c.GetHeader("Idempotency-Key")
+	if !validIdempotencyKey(idempotencyKey) {
+		c.JSON(http.StatusBadRequest, dto.MessageResponse{Message: "Idempotency-Key must be 1-255 printable ASCII characters without spaces"})
+		return
+	}
+
+	loanID, err := this.service.CreateLoan(c.Request.Context(), idempotencyKey, request)
 	if errors.Is(err, service.ErrBorrowerNotFound) {
 		c.JSON(http.StatusNotFound, dto.MessageResponse{Message: err.Error()})
+		return
+	}
+	if errors.Is(err, service.ErrIdempotencyConflict) {
+		c.JSON(http.StatusConflict, dto.MessageResponse{Message: err.Error()})
 		return
 	}
 	if err != nil {
@@ -65,6 +75,18 @@ func (this *LoanHandler) createLoan(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, dto.CreateLoanResponse{ID: loanID, Message: "loan created successfully"})
+}
+
+func validIdempotencyKey(key string) bool {
+	if len(key) == 0 || len(key) > 255 {
+		return false
+	}
+	for i := 0; i < len(key); i++ {
+		if key[i] < 0x21 || key[i] > 0x7e {
+			return false
+		}
+	}
+	return true
 }
 
 func (this *LoanHandler) getLoan(c *gin.Context) {
