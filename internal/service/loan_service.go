@@ -10,7 +10,6 @@ import (
 	"loan-service/internal/repository"
 	"loan-service/mapper"
 
-	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )
 
@@ -93,16 +92,16 @@ func matchingLoanID(loan model.Loan, request dto.CreateLoanRequest) (uint64, err
 	return loan.ID, nil
 }
 
-func (s *LoanService) GetLoan(id string) dto.LoanResponse {
-	return dto.LoanResponse{
-		ID:                 1,
-		BorrowerID:         1,
-		Principal:          decimal.NewFromInt(100000),
-		Rate:               decimal.NewFromFloat(0.05),
-		ROI:                decimal.NewFromFloat(0.08),
-		Status:             model.LoanStatusProposed,
-		AgreementLetterURL: "https://example.com/agreement.pdf",
+func (s *LoanService) GetLoan(ctx context.Context, id uint64) (dto.LoanResponse, error) {
+	loan, err := s.loanRepository.FindByID(ctx, id)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return dto.LoanResponse{}, ErrLoanNotFound
 	}
+	if err != nil {
+		return dto.LoanResponse{}, err
+	}
+
+	return mapper.LoanToLoanResponse(loan), nil
 }
 
 func (s *LoanService) ApproveLoan(ctx context.Context, id uint64, request dto.ApproveLoanRequest) error {

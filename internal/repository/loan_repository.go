@@ -79,6 +79,19 @@ func (r *LoanRepository) FindByIdempotencyKey(db *gorm.DB, key string) (model.Lo
 	return loan, nil
 }
 
+func (r *LoanRepository) FindByID(ctx context.Context, id uint64) (model.Loan, error) {
+	if r.db == nil {
+		return model.Loan{}, fmt.Errorf("find loan by ID: database connection is nil")
+	}
+
+	var loan model.Loan
+	if err := r.db.WithContext(ctx).First(&loan, id).Error; err != nil {
+		return model.Loan{}, fmt.Errorf("find loan by ID: %w", err)
+	}
+
+	return loan, nil
+}
+
 func (r *LoanRepository) FindByIDForUpdate(tx *gorm.DB, id uint64) (model.Loan, error) {
 	var loan model.Loan
 	if err := tx.

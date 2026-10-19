@@ -90,7 +90,22 @@ func validIdempotencyKey(key string) bool {
 }
 
 func (this *LoanHandler) getLoan(c *gin.Context) {
-	c.JSON(http.StatusOK, this.service.GetLoan(c.Param("id")))
+	loanID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || loanID == 0 {
+		c.JSON(http.StatusBadRequest, dto.MessageResponse{Message: "invalid loan ID"})
+		return
+	}
+
+	loan, err := this.service.GetLoan(c.Request.Context(), loanID)
+	switch {
+	case errors.Is(err, service.ErrLoanNotFound):
+		c.JSON(http.StatusNotFound, dto.MessageResponse{Message: err.Error()})
+	case err != nil:
+		log.Printf("get loan failed: %v", err)
+		c.JSON(http.StatusInternalServerError, dto.MessageResponse{Message: "failed to get loan"})
+	default:
+		c.JSON(http.StatusOK, loan)
+	}
 }
 
 func (this *LoanHandler) approveLoan(c *gin.Context) {
