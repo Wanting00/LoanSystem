@@ -3,8 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"net/url"
-	"path"
 	"strings"
 
 	"loan-service/internal/dto"
@@ -96,18 +94,4 @@ func (s *DisburseService) Disburse(
 	}
 
 	return disbursement.ID, nil
-}
-
-func isPDFOrJPEGURL(value string) bool {
-	parsedURL, err := url.Parse(value)
-	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" {
-		return false
-	}
-
-	switch strings.ToLower(path.Ext(parsedURL.Path)) {
-	case ".pdf", ".jpg", ".jpeg":
-		return true
-	default:
-		return false
-	}
 }

@@ -60,6 +60,10 @@ func (this *LoanHandler) createLoan(c *gin.Context) {
 	}
 
 	loanID, err := this.service.CreateLoan(c.Request.Context(), idempotencyKey, request)
+	if errors.Is(err, service.ErrInvalidAgreementLetterURL) {
+		c.JSON(http.StatusBadRequest, dto.MessageResponse{Message: err.Error()})
+		return
+	}
 	if errors.Is(err, service.ErrBorrowerNotFound) {
 		c.JSON(http.StatusNotFound, dto.MessageResponse{Message: err.Error()})
 		return
@@ -124,6 +128,8 @@ func (this *LoanHandler) approveLoan(c *gin.Context) {
 	err = this.service.ApproveLoan(c.Request.Context(), loanID, request)
 	switch {
 	case errors.Is(err, service.ErrInvalidApprovalRequest):
+		c.JSON(http.StatusBadRequest, dto.MessageResponse{Message: err.Error()})
+	case errors.Is(err, service.ErrInvalidValidatorPhotoURL):
 		c.JSON(http.StatusBadRequest, dto.MessageResponse{Message: err.Error()})
 	case errors.Is(err, service.ErrLoanNotFound):
 		c.JSON(http.StatusNotFound, dto.MessageResponse{Message: err.Error()})

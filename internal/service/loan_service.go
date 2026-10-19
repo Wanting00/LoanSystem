@@ -14,11 +14,13 @@ import (
 )
 
 var (
-	ErrLoanNotFound           = errors.New("loan not found")
-	ErrLoanNotProposed        = errors.New("loan is not in proposed status")
-	ErrApprovalConflict       = errors.New("approval record already exists")
-	ErrInvalidApprovalRequest = errors.New("approval information is required")
-	ErrIdempotencyConflict    = errors.New("idempotency key was already used with different loan parameters")
+	ErrLoanNotFound              = errors.New("loan not found")
+	ErrLoanNotProposed           = errors.New("loan is not in proposed status")
+	ErrApprovalConflict          = errors.New("approval record already exists")
+	ErrInvalidApprovalRequest    = errors.New("approval information is required")
+	ErrInvalidValidatorPhotoURL  = errors.New("validator photo URL must link to a PDF or JPEG")
+	ErrInvalidAgreementLetterURL = errors.New("agreement letter URL must link to a PDF or JPEG")
+	ErrIdempotencyConflict       = errors.New("idempotency key was already used with different loan parameters")
 )
 
 type LoanService struct {
@@ -35,6 +37,12 @@ func NewLoanService(
 }
 
 func (s *LoanService) CreateLoan(ctx context.Context, idempotencyKey string, request dto.CreateLoanRequest) (uint64, error) {
+	if request.AgreementLetterURL != "" {
+		if !isPDFOrJPEGURL(request.AgreementLetterURL) {
+			return 0, ErrInvalidAgreementLetterURL
+		}
+	}
+
 	existingLoan, err := s.loanRepository.FindByIdempotencyKey(s.db.WithContext(ctx), idempotencyKey)
 	if err == nil {
 		return matchingLoanID(existingLoan, request)
@@ -109,6 +117,9 @@ func (s *LoanService) ApproveLoan(ctx context.Context, id uint64, request dto.Ap
 		strings.TrimSpace(request.EmployeeID) == "" ||
 		request.ApprovalDate.IsZero() {
 		return ErrInvalidApprovalRequest
+	}
+	if !isPDFOrJPEGURL(request.ValidatorPhotoURL) {
+		return ErrInvalidValidatorPhotoURL
 	}
 
 	// The transaction commits if the callback returns nil
