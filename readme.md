@@ -109,17 +109,25 @@ WHERE TABLE_SCHEMA = DATABASE()
 
 ## 配置与运行
 
-```powershell
-$env:HTTP_ADDR = ":8081"
-$env:MYSQL_HOST = "127.0.0.1"
-$env:MYSQL_PORT = "3306"
-$env:MYSQL_DATABASE = "loan_system"
-$env:MYSQL_USER = "your-user"
-$env:MYSQL_PASSWORD = "your-password"
-go run ./cmd/server
-```
+应用从项目根目录的 `.env.local` 读取配置；如果该文件不存在，则使用部署环境中已注入的环境变量。必需配置缺失或为空时，启动及迁移命令会报告对应的变量名并退出。`.env.example` 是配置模板；首次使用时请将 `MYSQL_PASSWORD` 替换为本机 MySQL 密码，不要把真实密码写入 README。
 
-`config.OpenMySQL` 使用以上分项连接配置；当前代码没有读取 `MYSQL_DSN`。应用不会在启动时创建数据库或迁移数据表。
+| 变量 | 用途 | 本地开发值 |
+| --- | --- | --- |
+| `MYSQL_HOST` | MySQL 主机地址 | `127.0.0.1` |
+| `MYSQL_PORT` | MySQL 端口 | `3306` |
+| `MYSQL_USER` | MySQL 用户名 | `root` |
+| `MYSQL_PASSWORD` | MySQL 用户密码 | 在 `.env.local` 中填写 |
+| `MYSQL_DATABASE` | 应用使用的数据库名称 | `loan_system` |
+| `HTTP_ADDR` | HTTP 服务监听地址（可选） | 默认 `:8080` |
+
+本地运行步骤：
+
+1. 安装并启动 MySQL，创建一个可供本项目使用的用户，并确保该用户有权创建及使用数据库。
+2. 复制 `.env.example` 为 `.env.local`（或编辑已提供的 `.env.local`），填写本地 MySQL 用户名和密码。代码实际读取的是 `MYSQL_*` 变量，而非 `DB_*` 变量。
+3. 在项目根目录执行 `go run ./cmd/migrate`，创建 `loan_system` 数据库并迁移模型。
+4. 执行 `go run ./cmd/server` 启动服务。可选地设置 `HTTP_ADDR` 修改监听地址。
+
+`config.OpenMySQL` 使用以上分项连接配置；当前代码没有读取 `MYSQL_DSN`。应用启动不会自动迁移表结构。
 
 ## 当前范围
 

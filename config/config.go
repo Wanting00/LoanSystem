@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	mysqlDriver "github.com/go-sql-driver/mysql"
+	"github.com/joho/godotenv"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -21,17 +23,36 @@ type Config struct {
 	MySQLPassword string
 }
 
-func Load() Config {
-	return Config{
-		HTTPAddress:   envOrDefault("HTTP_ADDR", ":8080"),
-		MySQLHost:     envOrDefault("MYSQL_HOST", "127.0.0.1"),
-		MySQLPort:     envOrDefault("MYSQL_PORT", "3306"),
-		MySQLDatabase: envOrDefault("MYSQL_DATABASE", "loan_system"),
-		MySQLUser:     envOrDefault("MYSQL_USER", "root"),
-		MySQLPassword: envOrDefault("MYSQL_PASSWORD", "123"),
-		// MySQLUser:     os.Getenv("MYSQL_USER"),
-		// MySQLPassword: os.Getenv("MYSQL_PASSWORD"),
+func Load() (Config, error) {
+	if err := godotenv.Load(".env.local"); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return Config{}, fmt.Errorf("load .env.local: %w", err)
 	}
+
+	cfg := Config{
+		HTTPAddress:   envOrDefault("HTTP_ADDR", ":8080"),
+		MySQLHost:     os.Getenv("MYSQL_HOST"),
+		MySQLPort:     os.Getenv("MYSQL_PORT"),
+		MySQLDatabase: os.Getenv("MYSQL_DATABASE"),
+		MySQLUser:     os.Getenv("MYSQL_USER"),
+		MySQLPassword: os.Getenv("MYSQL_PASSWORD"),
+	}
+
+	for _, required := range []struct {
+		key   string
+		value string
+	}{
+		{key: "MYSQL_HOST", value: cfg.MySQLHost},
+		{key: "MYSQL_PORT", value: cfg.MySQLPort},
+		{key: "MYSQL_DATABASE", value: cfg.MySQLDatabase},
+		{key: "MYSQL_USER", value: cfg.MySQLUser},
+		{key: "MYSQL_PASSWORD", value: cfg.MySQLPassword},
+	} {
+		if strings.TrimSpace(required.value) == "" {
+			return Config{}, fmt.Errorf("%s must be set and non-empty", required.key)
+		}
+	}
+
+	return cfg, nil
 }
 
 func OpenMySQL(cfg Config) (*gorm.DB, error) {

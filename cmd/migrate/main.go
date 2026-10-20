@@ -15,7 +15,11 @@ func main() {
 }
 
 func run() error {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+
 	if err := config.EnsureMySQLDatabase(cfg); err != nil {
 		return err
 	}
