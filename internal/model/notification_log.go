@@ -23,7 +23,7 @@ type NotificationLog struct {
 	InvestmentID       uint64              `gorm:"not null"`
 	Channel            NotificationChannel `gorm:"type:varchar(16);not null"`
 	Recipient          string              `gorm:"type:varchar(255);not null"`
-	AgreementLetterURL string              `gorm:"type:varchar(512)"`
+	AgreementLetterURL string              `gorm:"type:varchar(2048)"`
 	Status             NotificationStatus  `gorm:"type:varchar(16);not null;default:pending;index:idx_status"`
 	CreatedAt          time.Time           `gorm:"type:datetime(3);not null"`
 	UpdatedAt          time.Time           `gorm:"type:datetime(3);not null"`
