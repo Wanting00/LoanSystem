@@ -10,6 +10,7 @@ import (
 	"loan-service/internal/repository"
 	"loan-service/mapper"
 
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )
 
@@ -21,6 +22,7 @@ var (
 	ErrInvalidValidatorPhotoURL  = errors.New("validator photo URL must link to a PDF or JPEG")
 	ErrInvalidAgreementLetterURL = errors.New("agreement letter URL is required and must link to a PDF or JPEG")
 	ErrInvalidCreateLoanRequest  = errors.New("borrowerId, principal, rate and roi are required")
+	ErrInvalidPrincipal          = errors.New("principal must be greater than zero")
 	ErrInvalidIdempotencyKey     = errors.New("Idempotency-Key must be 1-255 printable ASCII characters without spaces")
 	ErrLoanAlreadyCreated        = errors.New("loan already created")
 	ErrIdempotencyConflict       = errors.New("idempotency key was already used with different loan parameters")
@@ -57,6 +59,10 @@ func (s *LoanService) CreateLoan(ctx context.Context, idempotencyKey string, req
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return 0, err
+	}
+
+	if !request.Principal.GreaterThan(decimal.Zero) {
+		return 0, ErrInvalidPrincipal
 	}
 
 	// Check if the borrower exists before creating the loan

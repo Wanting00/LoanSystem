@@ -61,6 +61,7 @@ func (this *LoanHandler) createLoan(c *gin.Context) {
 
 	loanID, err := this.service.CreateLoan(c.Request.Context(), idempotencyKey, request)
 	if errors.Is(err, service.ErrInvalidCreateLoanRequest) ||
+		errors.Is(err, service.ErrInvalidPrincipal) ||
 		errors.Is(err, service.ErrInvalidIdempotencyKey) ||
 		errors.Is(err, service.ErrInvalidAgreementLetterURL) {
 		c.JSON(http.StatusBadRequest, dto.MessageResponse{Message: err.Error()})
