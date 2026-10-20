@@ -16,6 +16,7 @@ import (
 
 var (
 	ErrInvestorNotFound         = errors.New("investor not found")
+	ErrInvalidInvestRequest     = errors.New("investorId and amount are required")
 	ErrInvalidInvestmentAmount  = errors.New("investment amount must be greater than zero")
 	ErrLoanNotApprovedForInvest = errors.New("loan is not in approved status")
 	ErrInvestmentExceedsLoan    = errors.New("investment exceeds remaining loan principal")
@@ -46,7 +47,11 @@ func NewInvestService(
 }
 
 func (s *InvestService) Invest(ctx context.Context, loanID uint64, request dto.InvestRequest) error {
-	if !request.Amount.GreaterThan(decimal.Zero) || !request.Amount.Equal(request.Amount.Truncate(2)) {
+	if request.InvestorID == 0 || request.Amount == nil {
+		return ErrInvalidInvestRequest
+	}
+	amount := *request.Amount
+	if !amount.GreaterThan(decimal.Zero) || !amount.Equal(amount.Truncate(2)) {
 		return ErrInvalidInvestmentAmount
 	}
 
@@ -82,7 +87,7 @@ func (s *InvestService) Invest(ctx context.Context, loanID uint64, request dto.I
 		if err != nil {
 			return err
 		}
-		newTotal := totalInvested.Add(request.Amount)
+		newTotal := totalInvested.Add(amount)
 		if newTotal.GreaterThan(loan.Principal) {
 			return ErrInvestmentExceedsLoan
 		}
@@ -90,7 +95,7 @@ func (s *InvestService) Invest(ctx context.Context, loanID uint64, request dto.I
 		investment := &model.Investment{
 			LoanID:     loan.ID,
 			InvestorID: request.InvestorID,
-			Amount:     request.Amount,
+			Amount:     amount,
 		}
 		if err := s.investmentRepository.Create(tx, investment); err != nil {
 			return err

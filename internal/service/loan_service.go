@@ -19,7 +19,10 @@ var (
 	ErrApprovalConflict          = errors.New("approval record already exists")
 	ErrInvalidApprovalRequest    = errors.New("approval information is required")
 	ErrInvalidValidatorPhotoURL  = errors.New("validator photo URL must link to a PDF or JPEG")
-	ErrInvalidAgreementLetterURL = errors.New("agreement letter URL must link to a PDF or JPEG")
+	ErrInvalidAgreementLetterURL = errors.New("agreement letter URL is required and must link to a PDF or JPEG")
+	ErrInvalidCreateLoanRequest  = errors.New("borrowerId, principal, rate and roi are required")
+	ErrInvalidIdempotencyKey     = errors.New("Idempotency-Key must be 1-255 printable ASCII characters without spaces")
+	ErrLoanAlreadyCreated        = errors.New("loan already created")
 	ErrIdempotencyConflict       = errors.New("idempotency key was already used with different loan parameters")
 )
 
@@ -37,15 +40,20 @@ func NewLoanService(
 }
 
 func (s *LoanService) CreateLoan(ctx context.Context, idempotencyKey string, request dto.CreateLoanRequest) (uint64, error) {
-	if request.AgreementLetterURL != "" {
-		if !isPDFOrJPEGURL(request.AgreementLetterURL) {
-			return 0, ErrInvalidAgreementLetterURL
-		}
+	if request.BorrowerID == 0 || request.Principal == nil || request.Rate == nil || request.ROI == nil {
+		return 0, ErrInvalidCreateLoanRequest
+	}
+	if !IsValidIdempotencyKey(idempotencyKey) {
+		return 0, ErrInvalidIdempotencyKey
+	}
+
+	if strings.TrimSpace(request.AgreementLetterURL) == "" || !isPDFOrJPEGURL(request.AgreementLetterURL) {
+		return 0, ErrInvalidAgreementLetterURL
 	}
 
 	existingLoan, err := s.loanRepository.FindByIdempotencyKey(s.db.WithContext(ctx), idempotencyKey)
 	if err == nil {
-		return matchingLoanID(existingLoan, request)
+		return replayedLoan(existingLoan, request)
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return 0, err
@@ -79,7 +87,7 @@ func (s *LoanService) CreateLoan(ctx context.Context, idempotencyKey string, req
 			}
 			return 0, findErr
 		}
-		return matchingLoanID(existingLoan, request)
+		return replayedLoan(existingLoan, request)
 	}
 	if err != nil {
 		return 0, err
@@ -88,11 +96,33 @@ func (s *LoanService) CreateLoan(ctx context.Context, idempotencyKey string, req
 	return createdLoan.ID, nil
 }
 
+func IsValidIdempotencyKey(key string) bool {
+	if len(key) == 0 || len(key) > 255 {
+		return false
+	}
+	for i := 0; i < len(key); i++ {
+		if key[i] < 0x21 || key[i] > 0x7e {
+			return false
+		}
+	}
+	return true
+}
+
+// replayedLoan reports a reused idempotency key: the original loan ID is still
+// returned, with ErrLoanAlreadyCreated when parameters match.
+func replayedLoan(loan model.Loan, request dto.CreateLoanRequest) (uint64, error) {
+	id, err := matchingLoanID(loan, request)
+	if err != nil {
+		return 0, err
+	}
+	return id, ErrLoanAlreadyCreated
+}
+
 func matchingLoanID(loan model.Loan, request dto.CreateLoanRequest) (uint64, error) {
 	if loan.BorrowerID != request.BorrowerID ||
-		!loan.Principal.Equal(request.Principal) ||
-		!loan.Rate.Equal(request.Rate) ||
-		!loan.ROI.Equal(request.ROI) ||
+		!loan.Principal.Equal(*request.Principal) ||
+		!loan.Rate.Equal(*request.Rate) ||
+		!loan.ROI.Equal(*request.ROI) ||
 		loan.AgreementLetterURL != request.AgreementLetterURL {
 		return 0, ErrIdempotencyConflict
 	}

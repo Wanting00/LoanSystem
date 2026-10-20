@@ -7,11 +7,11 @@ import (
 )
 
 type CreateLoanRequest struct {
-	BorrowerID         uint64          `json:"borrowerId"`
-	Principal          decimal.Decimal `json:"principal"`
-	Rate               decimal.Decimal `json:"rate"`
-	ROI                decimal.Decimal `json:"roi"`
-	AgreementLetterURL string          `json:"agreementLetterUrl"`
+	BorrowerID         uint64           `json:"borrowerId" binding:"required"`
+	Principal          *decimal.Decimal `json:"principal" binding:"required"`
+	Rate               *decimal.Decimal `json:"rate" binding:"required"`
+	ROI                *decimal.Decimal `json:"roi" binding:"required"`
+	AgreementLetterURL string           `json:"agreementLetterUrl" binding:"required"`
 }
 
 type ApproveLoanRequest struct {
@@ -21,8 +21,8 @@ type ApproveLoanRequest struct {
 }
 
 type InvestRequest struct {
-	InvestorID uint64          `json:"investorId"`
-	Amount     decimal.Decimal `json:"amount"`
+	InvestorID uint64           `json:"investorId" binding:"required"`
+	Amount     *decimal.Decimal `json:"amount" binding:"required"`
 }
 
 type DisburseRequest struct {

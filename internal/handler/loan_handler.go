@@ -54,13 +54,15 @@ func (this *LoanHandler) createLoan(c *gin.Context) {
 	}
 
 	idempotencyKey := c.GetHeader("Idempotency-Key")
-	if !validIdempotencyKey(idempotencyKey) {
-		c.JSON(http.StatusBadRequest, dto.MessageResponse{Message: "Idempotency-Key must be 1-255 printable ASCII characters without spaces"})
+	if !service.IsValidIdempotencyKey(idempotencyKey) {
+		c.JSON(http.StatusBadRequest, dto.MessageResponse{Message: service.ErrInvalidIdempotencyKey.Error()})
 		return
 	}
 
 	loanID, err := this.service.CreateLoan(c.Request.Context(), idempotencyKey, request)
-	if errors.Is(err, service.ErrInvalidAgreementLetterURL) {
+	if errors.Is(err, service.ErrInvalidCreateLoanRequest) ||
+		errors.Is(err, service.ErrInvalidIdempotencyKey) ||
+		errors.Is(err, service.ErrInvalidAgreementLetterURL) {
 		c.JSON(http.StatusBadRequest, dto.MessageResponse{Message: err.Error()})
 		return
 	}
@@ -68,7 +70,7 @@ func (this *LoanHandler) createLoan(c *gin.Context) {
 		c.JSON(http.StatusNotFound, dto.MessageResponse{Message: err.Error()})
 		return
 	}
-	if errors.Is(err, service.ErrIdempotencyConflict) {
+	if errors.Is(err, service.ErrIdempotencyConflict) || errors.Is(err, service.ErrLoanAlreadyCreated) {
 		c.JSON(http.StatusConflict, dto.MessageResponse{Message: err.Error()})
 		return
 	}
@@ -79,18 +81,6 @@ func (this *LoanHandler) createLoan(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, dto.CreateLoanResponse{ID: loanID, Message: "loan created successfully"})
-}
-
-func validIdempotencyKey(key string) bool {
-	if len(key) == 0 || len(key) > 255 {
-		return false
-	}
-	for i := 0; i < len(key); i++ {
-		if key[i] < 0x21 || key[i] > 0x7e {
-			return false
-		}
-	}
-	return true
 }
 
 func (this *LoanHandler) getLoan(c *gin.Context) {
@@ -158,7 +148,7 @@ func (this *LoanHandler) investInLoan(c *gin.Context) {
 
 	err = this.investService.Invest(c.Request.Context(), loanID, request)
 	switch {
-	case errors.Is(err, service.ErrInvalidInvestmentAmount):
+	case errors.Is(err, service.ErrInvalidInvestRequest), errors.Is(err, service.ErrInvalidInvestmentAmount):
 		c.JSON(http.StatusBadRequest, dto.MessageResponse{Message: err.Error()})
 	case errors.Is(err, service.ErrLoanNotFound), errors.Is(err, service.ErrInvestorNotFound):
 		c.JSON(http.StatusNotFound, dto.MessageResponse{Message: err.Error()})

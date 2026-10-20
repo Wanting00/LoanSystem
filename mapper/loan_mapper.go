@@ -8,9 +8,9 @@ import (
 func CreateLoanRequestToLoan(request dto.CreateLoanRequest) model.Loan {
 	return model.Loan{
 		BorrowerID:         request.BorrowerID,
-		Principal:          request.Principal,
-		Rate:               request.Rate,
-		ROI:                request.ROI,
+		Principal:          *request.Principal,
+		Rate:               *request.Rate,
+		ROI:                *request.ROI,
 		AgreementLetterURL: request.AgreementLetterURL,
 		Status:             model.LoanStatusProposed,
 	}

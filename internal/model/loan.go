@@ -18,11 +18,11 @@ const (
 type Loan struct {
 	ID                 uint64          `gorm:"primaryKey;autoIncrement"`
 	BorrowerID         uint64          `gorm:"not null;index"`
-	IdempotencyKey     string          `gorm:"type:varchar(255);collate:ascii_bin;uniqueIndex:ux_loans_idempotency_key"`
+	IdempotencyKey     string          `gorm:"type:varchar(255);collate:ascii_bin;not null;uniqueIndex:ux_loans_idempotency_key"`
 	Principal          decimal.Decimal `gorm:"type:decimal(20,2);not null"`
-	Rate               decimal.Decimal `gorm:"type:decimal(10,6)"`
-	ROI                decimal.Decimal `gorm:"type:decimal(10,6)"`
-	AgreementLetterURL string          `gorm:"type:varchar(2048)"`
+	Rate               decimal.Decimal `gorm:"type:decimal(10,6);not null"`
+	ROI                decimal.Decimal `gorm:"type:decimal(10,6);not null"`
+	AgreementLetterURL string          `gorm:"type:varchar(2048);not null"`
 	Status             LoanStatus      `gorm:"not null;index"`
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
