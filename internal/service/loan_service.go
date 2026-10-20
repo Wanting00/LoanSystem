@@ -22,7 +22,7 @@ var (
 	ErrInvalidValidatorPhotoURL  = errors.New("validator photo URL must link to a PDF or JPEG")
 	ErrInvalidAgreementLetterURL = errors.New("agreement letter URL is required and must link to a PDF or JPEG")
 	ErrInvalidCreateLoanRequest  = errors.New("borrowerId, principal, rate and roi are required")
-	ErrInvalidPrincipal          = errors.New("principal must be greater than zero")
+	ErrInvalidPrincipal          = errors.New("principal must be a positive integer within the DECIMAL(20,2) range")
 	ErrInvalidIdempotencyKey     = errors.New("Idempotency-Key must be 1-255 printable ASCII characters without spaces")
 	ErrLoanAlreadyCreated        = errors.New("loan already created")
 	ErrIdempotencyConflict       = errors.New("idempotency key was already used with different loan parameters")
@@ -61,7 +61,10 @@ func (s *LoanService) CreateLoan(ctx context.Context, idempotencyKey string, req
 		return 0, err
 	}
 
-	if !request.Principal.GreaterThan(decimal.Zero) {
+	maxPrincipal := decimal.NewFromInt(999_999_999_999_999_999)
+	if !request.Principal.GreaterThan(decimal.Zero) ||
+		!request.Principal.IsInteger() ||
+		request.Principal.GreaterThan(maxPrincipal) {
 		return 0, ErrInvalidPrincipal
 	}
 
