@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"log"
 	"net/http"
@@ -27,17 +28,19 @@ func main() {
 	loanService := service.NewLoanService(db, loanRepository, borrowerService)
 	investmentRepository := repository.NewInvestmentRepository()
 	investorRepository := repository.NewInvestorRepository()
+	notificationLogRepository := repository.NewNotificationLogRepository(db)
 	notificationService := service.NewNotificationService(
-		db,
-		investmentRepository,
-		investorRepository,
-		repository.NewNotificationLogRepository(db),
+		notificationLogRepository,
 	)
+	notificationWorker := service.NewNotificationWorker(notificationLogRepository, notificationService)
+	go notificationWorker.Run(context.Background())
+
 	investService := service.NewInvestService(
 		db,
 		loanRepository,
 		investmentRepository,
 		investorRepository,
+		notificationLogRepository,
 		notificationService,
 	)
 	disburseService := service.NewDisburseService(

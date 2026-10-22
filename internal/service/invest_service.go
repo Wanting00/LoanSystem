@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -27,6 +28,7 @@ type InvestService struct {
 	loanRepository       *repository.LoanRepository
 	investmentRepository *repository.InvestmentRepository
 	investorRepository   *repository.InvestorRepository
+	notificationLogRepo  *repository.NotificationLogRepository
 	notificationService  *NotificationService
 }
 
@@ -35,6 +37,7 @@ func NewInvestService(
 	loanRepository *repository.LoanRepository,
 	investmentRepository *repository.InvestmentRepository,
 	investorRepository *repository.InvestorRepository,
+	notificationLogRepo *repository.NotificationLogRepository,
 	notificationService *NotificationService,
 ) *InvestService {
 	return &InvestService{
@@ -42,6 +45,7 @@ func NewInvestService(
 		loanRepository:       loanRepository,
 		investmentRepository: investmentRepository,
 		investorRepository:   investorRepository,
+		notificationLogRepo:  notificationLogRepo,
 		notificationService:  notificationService,
 	}
 }
@@ -56,7 +60,7 @@ func (s *InvestService) Invest(ctx context.Context, loanID uint64, request dto.I
 	}
 
 	var loanBecameInvested bool
-	var agreementLetterURL string
+	var notificationLogs []model.NotificationLog
 
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		loan, err := s.loanRepository.FindByIDForUpdate(tx, loanID)
@@ -66,7 +70,6 @@ func (s *InvestService) Invest(ctx context.Context, loanID uint64, request dto.I
 		if err != nil {
 			return err
 		}
-		agreementLetterURL = loan.AgreementLetterURL
 
 		// check if the loan is approved for investment
 		if loan.Status != model.LoanStatusApproved {
@@ -106,6 +109,33 @@ func (s *InvestService) Invest(ctx context.Context, loanID uint64, request dto.I
 				return err
 			}
 			loanBecameInvested = true
+
+			investments, err := s.investmentRepository.ListByLoanID(tx, loan.ID)
+			if err != nil {
+				return err
+			}
+
+			// create notification logs(for email) for each investment
+			for _, investment := range investments {
+				recipient, err := s.investorRepository.GetEmailByID(tx, investment.InvestorID)
+				if err != nil {
+					return err
+				}
+
+				notificationLog := model.NotificationLog{
+					EventKey:           fmt.Sprintf("loan:%d:investment:%d:email", loan.ID, investment.ID),
+					LoanID:             loan.ID,
+					InvestmentID:       investment.ID,
+					Channel:            model.ChannelEmail,
+					Recipient:          recipient,
+					AgreementLetterURL: loan.AgreementLetterURL,
+					Status:             model.NotificationStatusPending,
+				}
+				if err := s.notificationLogRepo.Create(tx, &notificationLog); err != nil {
+					return err
+				}
+				notificationLogs = append(notificationLogs, notificationLog)
+			}
 		}
 
 		return nil
@@ -114,15 +144,16 @@ func (s *InvestService) Invest(ctx context.Context, loanID uint64, request dto.I
 		return err
 	}
 
+	// notify investors if the loan became fully invested
 	if loanBecameInvested {
-		go func(notificationLoanID uint64, agreementURL string) {
+		go func(logs []model.NotificationLog) {
 			notificationCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			if err := s.notificationService.NotifyLoanInvested(notificationCtx, notificationLoanID, agreementURL); err != nil {
-				log.Printf("notify investors for loan %d failed: %v", notificationLoanID, err)
+			if err := s.notificationService.NotifyLoanInvested(notificationCtx, logs); err != nil {
+				log.Printf("notify investors for loan %d failed: %v", loanID, err)
 			}
-		}(loanID, agreementLetterURL)
+		}(notificationLogs)
 	}
 
 	return nil

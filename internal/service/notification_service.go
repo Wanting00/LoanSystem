@@ -8,9 +8,11 @@ import (
 
 	"loan-service/internal/model"
 	"loan-service/internal/repository"
-
-	"gorm.io/gorm"
 )
+
+const MaxRetryCount = 3
+
+var errNotificationStatePersistence = errors.New("notification state persistence failed")
 
 func sendEmail(recipient, agreementLetterURL string) error {
 	log.Printf("mock email sent to %s with agreement letter %s", recipient, agreementLetterURL)
@@ -18,62 +20,62 @@ func sendEmail(recipient, agreementLetterURL string) error {
 }
 
 type NotificationService struct {
-	db                        *gorm.DB
-	investmentRepository      *repository.InvestmentRepository
-	investorRepository        *repository.InvestorRepository
 	notificationLogRepository *repository.NotificationLogRepository
 }
 
 func NewNotificationService(
-	db *gorm.DB,
-	investmentRepository *repository.InvestmentRepository,
-	investorRepository *repository.InvestorRepository,
 	notificationLogRepository *repository.NotificationLogRepository,
 ) *NotificationService {
 	return &NotificationService{
-		db:                        db,
-		investmentRepository:      investmentRepository,
-		investorRepository:        investorRepository,
 		notificationLogRepository: notificationLogRepository,
 	}
 }
 
-func (s *NotificationService) NotifyLoanInvested(ctx context.Context, loanID uint64, agreementLetterURL string) error {
-	investments, err := s.investmentRepository.ListByLoanID(s.db.WithContext(ctx), loanID)
-	if err != nil {
-		return fmt.Errorf("list investments for loan %d: %w", loanID, err)
-	}
-
+func (s *NotificationService) NotifyLoanInvested(ctx context.Context, notificationLogs []model.NotificationLog) error {
 	var notificationErrors []error
-	for _, investment := range investments {
-		recipient, err := s.investorRepository.GetEmailByID(s.db.WithContext(ctx), investment.InvestorID)
+	for _, notificationLog := range notificationLogs {
+		// status: pending → sending (to avoid workers sending the same notification)
+		claimed, err := s.notificationLogRepository.TryMarkSending(ctx, notificationLog.ID, MaxRetryCount)
 		if err != nil {
-			notificationErrors = append(notificationErrors, fmt.Errorf("get email for investor %d: %w", investment.InvestorID, err))
+			notificationErrors = append(notificationErrors, fmt.Errorf(
+				"%w: claim notification %d: %w",
+				errNotificationStatePersistence,
+				notificationLog.ID,
+				err,
+			))
+			continue
+		}
+		if !claimed {
 			continue
 		}
 
-		notificationLog := &model.NotificationLog{
-			LoanID:             loanID,
-			InvestmentID:       investment.ID,
-			Channel:            model.ChannelEmail,
-			Recipient:          recipient,
-			AgreementLetterURL: agreementLetterURL,
-			Status:             model.NotificationStatusPending,
-		}
-		if err := s.notificationLogRepository.Create(s.db.WithContext(ctx), notificationLog); err != nil {
-			notificationErrors = append(notificationErrors, fmt.Errorf("create notification log for investment %d: %w", investment.ID, err))
+		sendErr := sendEmail(notificationLog.Recipient, notificationLog.AgreementLetterURL)
+		if sendErr == nil {
+			if err := s.notificationLogRepository.MarkSent(ctx, notificationLog.ID); err != nil {
+				notificationErrors = append(notificationErrors, fmt.Errorf(
+					"%w: mark notification %d sent: %w",
+					errNotificationStatePersistence,
+					notificationLog.ID,
+					err,
+				))
+			}
 			continue
 		}
 
-		sendErr := sendEmail(recipient, agreementLetterURL)
-		status := model.NotificationStatusSent
-		if sendErr != nil {
-			status = model.NotificationStatusFailed
-			notificationErrors = append(notificationErrors, fmt.Errorf("send notification for investment %d: %w", investment.ID, sendErr))
+		// update the retry count and status based on the result of sending the notification
+		nextRetryCount := notificationLog.RetryCount + 1
+		nextStatus := model.NotificationStatusPending
+		if nextRetryCount > MaxRetryCount {
+			nextStatus = model.NotificationStatusFailed
 		}
-		if err := s.notificationLogRepository.UpdateStatus(ctx, notificationLog.ID, status); err != nil {
-			notificationErrors = append(notificationErrors, fmt.Errorf("update notification log %d: %w", notificationLog.ID, err))
+		if err := s.notificationLogRepository.RecordFailure(ctx, notificationLog.ID, nextRetryCount, nextStatus); err != nil {
+			notificationErrors = append(notificationErrors, errors.Join(
+				fmt.Errorf("send notification %d: %w", notificationLog.ID, sendErr),
+				fmt.Errorf("%w: record failure for notification %d: %w", errNotificationStatePersistence, notificationLog.ID, err),
+			))
+			continue
 		}
+		notificationErrors = append(notificationErrors, fmt.Errorf("send notification %d: %w", notificationLog.ID, sendErr))
 	}
 
 	return errors.Join(notificationErrors...)

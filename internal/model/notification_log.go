@@ -19,12 +19,14 @@ const (
 
 type NotificationLog struct {
 	ID                 uint64              `gorm:"primaryKey;autoIncrement"`
+	EventKey           string              `gorm:"type:varchar(255);uniqueIndex:ux_notification_logs_event_key"`
 	LoanID             uint64              `gorm:"not null"`
 	InvestmentID       uint64              `gorm:"not null"`
 	Channel            NotificationChannel `gorm:"type:varchar(16);not null"`
 	Recipient          string              `gorm:"type:varchar(255);not null"`
 	AgreementLetterURL string              `gorm:"type:varchar(2048)"`
 	Status             NotificationStatus  `gorm:"type:varchar(16);not null;default:pending;index:idx_status"`
+	RetryCount         int                 `gorm:"not null;default:0"`
 	CreatedAt          time.Time           `gorm:"type:datetime(3);not null"`
 	UpdatedAt          time.Time           `gorm:"type:datetime(3);not null"`
 }
